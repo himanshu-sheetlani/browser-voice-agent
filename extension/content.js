@@ -1,8 +1,10 @@
 // Content script for Voice Browser Agent
 // Extracts structured information from the page for automation/LLM use
+
 chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
   if (request.action === "getPageInfo") {
     const pageInfo = extractPageInfo();
+    console.log("Extracted page info:", pageInfo); // Debug log
     sendResponse({ info: pageInfo });
   } else if (request.action === "getPageHTML") {
     // Keep original functionality as fallback
@@ -30,7 +32,8 @@ function extractPageInfo() {
     info.headings.push({
       level: parseInt(heading.tagName.substring(1)),
       text: heading.innerText.trim(),
-      index: index
+      index: index,
+      id: heading.id || '' // Include element ID
     });
   });
 
@@ -44,7 +47,8 @@ function extractPageInfo() {
       info.links.push({
         text: text || '[No text]',
         href: href,
-        index: index
+        index: index,
+        id: link.id || '' // Include element ID
       });
     }
   });
@@ -67,7 +71,8 @@ function extractPageInfo() {
         name: input.name || '',
         placeholder: input.placeholder || '',
         value: input.value || '',
-        required: input.required
+        required: input.required,
+        id: input.id || '' // Include element ID
       };
       formInfo.inputs.push(inputInfo);
     });
@@ -78,7 +83,8 @@ function extractPageInfo() {
         type: button.type || button.tagName.toLowerCase(),
         name: button.name || '',
         value: button.value || '',
-        text: button.innerText || button.value || ''
+        text: button.innerText || button.value || '',
+        id: button.id || '' // Include element ID
       };
       formInfo.buttons.push(buttonInfo);
     });
@@ -97,7 +103,8 @@ function extractPageInfo() {
       text: button.innerText || button.value || '',
       // Try to get a meaningful label
       ariaLabel: button.getAttribute('aria-label') || '',
-      title: button.getAttribute('title') || ''
+      title: button.getAttribute('title') || '',
+      id: button.id || '' // Include element ID
     };
     info.buttons.push(buttonInfo);
   });
@@ -113,7 +120,8 @@ function extractPageInfo() {
       value: input.value || '',
       required: input.required,
       // Try to get associated label text
-      label: getAssociatedLabel(input)
+      label: getAssociatedLabel(input),
+      id: input.id || '' // Include element ID
     };
     info.inputs.push(inputInfo);
   });

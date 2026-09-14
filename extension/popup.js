@@ -73,9 +73,9 @@ document.addEventListener('DOMContentLoaded', () => {
             // Display the structured information in a readable format
             pageSnapshotDiv.innerHTML = formatPageInfo(response.info);
 
-            // ! Formatted page info is now stored in the global variable for potential further use
-            pageSnapshot = response.info; 
-            
+            // Store the info for potential further use (e.g., by other parts of the extension)
+            pageSnapshot = response.info;
+
           } else {
             pageSnapshotDiv.textContent = 'No response from content script';
           }
@@ -111,7 +111,11 @@ function formatPageInfo(info) {
     html += '<div><strong>Headings:</strong></div><ul>';
     info.headings.forEach(h => {
       const indent = '  '.repeat(h.level - 1);
-      html += `<li>${indent}<strong>h${h.level}:</strong> ${escapeHtml(h.text)}</li>`;
+      let headingText = `h${h.level}: ${escapeHtml(h.text)}`;
+      if (h.id) {
+        headingText += ` (id: ${escapeHtml(h.id)})`;
+      }
+      html += `<li>${indent}${headingText}</li>`;
     });
     html += '</ul><hr>';
   }
@@ -123,7 +127,11 @@ function formatPageInfo(info) {
     const linksToShow = info.links.slice(0, 20);
     html += '<ul>';
     linksToShow.forEach((link, index) => {
-      html += `<li><strong>${escapeHtml(link.text || '[No text]')}</strong>: ${escapeHtml(link.href)}</li>`;
+      let linkText = `${escapeHtml(link.text || '[No text]')}: ${escapeHtml(link.href)}`;
+      if (link.id) {
+        linkText += ` (id: ${escapeHtml(link.id)})`;
+      }
+      html += `<li>${linkText}</li>`;
     });
     if (info.links.length > 20) {
       html += `<li><em>... and ${info.links.length - 20} more links</em></li>`;
@@ -145,6 +153,7 @@ function formatPageInfo(info) {
           if (input.placeholder) details += ` placeholder="${escapeHtml(input.placeholder)}"`;
           if (input.value) details += ` value="${escapeHtml(input.value)}"`;
           if (input.required) details += ' required';
+          if (input.id) details += ` id="${escapeHtml(input.id)}"`;
           html += `<li>${details}</li>`;
         });
         html += '</ul></div>';
@@ -157,6 +166,7 @@ function formatPageInfo(info) {
           if (button.name) details += ` name="${escapeHtml(button.name)}"`;
           if (button.value) details += ` value="${escapeHtml(button.value)}"`;
           if (button.text) details += ` text="${escapeHtml(button.text)}"`;
+          if (button.id) details += ` id="${escapeHtml(button.id)}"`;
           html += `<li>${details}</li>`;
         });
         html += '</ul></div>';
@@ -177,6 +187,7 @@ function formatPageInfo(info) {
       if (input.value) details += ` value="${escapeHtml(input.value)}"`;
       if (input.required) details += ' required';
       if (input.label) details += ` label="${escapeHtml(input.label)}"`;
+      if (input.id) details += ` id="${escapeHtml(input.id)}"`;
       html += `<li>${details}</li>`;
     });
     html += '</ul><hr>';
@@ -192,6 +203,7 @@ function formatPageInfo(info) {
       if (button.text) details += ` text="${escapeHtml(button.text)}"`;
       if (button.ariaLabel) details += ` aria-label="${escapeHtml(button.ariaLabel)}"`;
       if (button.title) details += ` title="${escapeHtml(button.title)}"`;
+      if (button.id) details += ` id="${escapeHtml(button.id)}"`;
       html += `<li>${details}</li>`;
     });
     html += '</ul>';
