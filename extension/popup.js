@@ -1,11 +1,13 @@
 // Popup script for Voice Browser Agent
-// Captures the current tab's page HTML and displays it in page-snapshot div
+// Extracts and displays structured page information for automation/LLM use
+
+let pageSnapshot;
 
 document.addEventListener('DOMContentLoaded', () => {
   const pageSnapshotDiv = document.getElementById('page-snapshot');
-  
+
   // Show loading state
-  pageSnapshotDiv.textContent = 'Loading page snapshot...';
+  pageSnapshotDiv.textContent = 'Extracting page information...';
 
   // Get the active tab
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
@@ -26,14 +28,14 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    // Try to get page HTML with retries
+    // Try to get page info with retries
     let retryCount = 0;
     const maxRetries = 3;
 
-    const attemptGetPageHTML = () => {
+    const attemptGetPageInfo = () => {
       chrome.tabs.sendMessage(
         activeTab.id,
-        { action: "getPageHTML" },
+        { action: "getPageInfo" },
         (response) => {
           if (chrome.runtime.lastError) {
             // Handle specific error cases
@@ -41,7 +43,7 @@ document.addEventListener('DOMContentLoaded', () => {
               retryCount++;
               if (retryCount <= maxRetries) {
                 // Wait a bit and try again (exponential backoff)
-                setTimeout(attemptGetPageHTML, 500 * retryCount);
+                setTimeout(attemptGetPageInfo, 500 * retryCount);
                 return;
               } else {
                 // Max retries exceeded
@@ -67,10 +69,13 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
           }
 
-          if (response && response.html) {
-            // Display the HTML in the page-snapshot div
-            // We'll show it as formatted/code for readability
-            pageSnapshotDiv.innerHTML = `<pre>${escapeHtml(response.html)}</pre>`;
+          if (response && response.info) {
+            // Display the structured information in a readable format
+            pageSnapshotDiv.innerHTML = formatPageInfo(response.info);
+
+            // ! Formatted page info is now stored in the global variable for potential further use
+            pageSnapshot = response.info; 
+            
           } else {
             pageSnapshotDiv.textContent = 'No response from content script';
           }
@@ -79,13 +84,125 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // Start the first attempt
-    attemptGetPageHTML();
+    attemptGetPageInfo();
   });
 });
 
-// Helper function to escape HTML for display in <pre> tag
+// Helper function to escape HTML for display
 function escapeHtml(text) {
   const div = document.createElement('div');
   div.textContent = text;
   return div.innerHTML;
+}
+
+// Format the extracted page information into readable HTML/text
+function formatPageInfo(info) {
+  let html = '<div style="font-family: monospace; line-height: 1.5;">';
+
+  // Page URL and Title
+  html += `<div><strong>Page URL:</strong> ${escapeHtml(info.url)}</div>`;
+  if (info.title) {
+    html += `<div><strong>Page Title:</strong> ${escapeHtml(info.title)}</div>`;
+  }
+  html += '<hr>';
+
+  // Headings
+  if (info.headings && info.headings.length > 0) {
+    html += '<div><strong>Headings:</strong></div><ul>';
+    info.headings.forEach(h => {
+      const indent = '  '.repeat(h.level - 1);
+      html += `<li>${indent}<strong>h${h.level}:</strong> ${escapeHtml(h.text)}</li>`;
+    });
+    html += '</ul><hr>';
+  }
+
+  // Links
+  if (info.links && info.links.length > 0) {
+    html += `<div><strong>Links (${info.links.length}):</strong></div>`;
+    // Limit to first 20 links to avoid overwhelming display
+    const linksToShow = info.links.slice(0, 20);
+    html += '<ul>';
+    linksToShow.forEach((link, index) => {
+      html += `<li><strong>${escapeHtml(link.text || '[No text]')}</strong>: ${escapeHtml(link.href)}</li>`;
+    });
+    if (info.links.length > 20) {
+      html += `<li><em>... and ${info.links.length - 20} more links</em></li>`;
+    }
+    html += '</ul><hr>';
+  }
+
+  // Forms
+  if (info.forms && info.forms.length > 0) {
+    html += `<div><strong>Forms (${info.forms.length}):</strong></div>`;
+    info.forms.forEach((form, formIndex) => {
+      html += `<div><strong>Form #${formIndex + 1}</strong> (${form.method.toUpperCase()} → ${escapeHtml(form.action || '[no action]')}):</div>`;
+
+      if (form.inputs && form.inputs.length > 0) {
+        html += '<div style="margin-left: 20px;"><strong>Inputs:</strong><ul>';
+        form.inputs.forEach((input, index) => {
+          let details = `(${input.type})`;
+          if (input.name) details += ` name="${escapeHtml(input.name)}"`;
+          if (input.placeholder) details += ` placeholder="${escapeHtml(input.placeholder)}"`;
+          if (input.value) details += ` value="${escapeHtml(input.value)}"`;
+          if (input.required) details += ' required';
+          html += `<li>${details}</li>`;
+        });
+        html += '</ul></div>';
+      }
+
+      if (form.buttons && form.buttons.length > 0) {
+        html += '<div style="margin-left: 20px;"><strong>Buttons:</strong><ul>';
+        form.buttons.forEach((button, index) => {
+          let details = `(${button.type})`;
+          if (button.name) details += ` name="${escapeHtml(button.name)}"`;
+          if (button.value) details += ` value="${escapeHtml(button.value)}"`;
+          if (button.text) details += ` text="${escapeHtml(button.text)}"`;
+          html += `<li>${details}</li>`;
+        });
+        html += '</ul></div>';
+      }
+
+      html += '<br>';
+    });
+    html += '<hr>';
+  }
+
+  // Standalone Inputs
+  if (info.inputs && info.inputs.length > 0) {
+    html += `<div><strong>Standalone Inputs (${info.inputs.length}):</strong></div><ul>`;
+    info.inputs.forEach((input, index) => {
+      let details = `(${input.type})`;
+      if (input.name) details += ` name="${escapeHtml(input.name)}"`;
+      if (input.placeholder) details += ` placeholder="${escapeHtml(input.placeholder)}"`;
+      if (input.value) details += ` value="${escapeHtml(input.value)}"`;
+      if (input.required) details += ' required';
+      if (input.label) details += ` label="${escapeHtml(input.label)}"`;
+      html += `<li>${details}</li>`;
+    });
+    html += '</ul><hr>';
+  }
+
+  // Standalone Buttons
+  if (info.buttons && info.buttons.length > 0) {
+    html += `<div><strong>Standalone Buttons (${info.buttons.length}):</strong></div><ul>`;
+    info.buttons.forEach((button, index) => {
+      let details = `(${button.type})`;
+      if (button.name) details += ` name="${escapeHtml(button.name)}"`;
+      if (button.value) details += ` value="${escapeHtml(button.value)}"`;
+      if (button.text) details += ` text="${escapeHtml(button.text)}"`;
+      if (button.ariaLabel) details += ` aria-label="${escapeHtml(button.ariaLabel)}"`;
+      if (button.title) details += ` title="${escapeHtml(button.title)}"`;
+      html += `<li>${details}</li>`;
+    });
+    html += '</ul>';
+  }
+
+  html += '</div>';
+
+  // If we have very little information, show a hint
+  if (!info.headings?.length && !info.links?.length && !info.forms?.length && !info.inputs?.length && !info.buttons?.length) {
+    html += '<div style="color: #666; font-style: italic;">No significant interactive elements detected on this page.</div>';
+  }
+
+  return html;
 }
